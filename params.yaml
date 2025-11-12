@@ -1,0 +1,78 @@
+exp1:
+  cornell: {'K': 4, 'dropout': 0.4}
+  texas: {'K': 2, 'dropout': 0.3}
+  reed98: {'K': 2, 'dropout': 0.4}
+  citeseer: {'K': 2, 'dropout': 0.7}
+  amherst41: {'K': 5, 'dropout': 0.7}
+  chameleon: {'K': 5, 'dropout': 0.4}
+  cora: {'K': 2, 'dropout': 0.6}
+  johnshopkins55: {'K': 6, 'dropout': 0.7}
+  squirrel: {'K': 4, 'dropout': 0.4}
+  photo: {'K': 5, 'dropout': 0.5}
+  actor: {'K': 2, 'dropout': 0.4}
+  film: {'K': 5, 'dropout': 0.3}
+  computers: {'K': 3, 'dropout': 0.5}
+  cornell5: {'K': 4, 'dropout': 0.6}
+  pubmed: {'K': 5, 'dropout': 0.3}
+  penn94: {'K': 5, 'dropout': 0.3}
+exp2:
+  cora:
+    Meta-Self:
+      0.0: {'K': 4, 'dropout': 0.6}
+      0.05: {'K': 2, 'dropout': 0.5}
+      0.1: {'K': 4, 'dropout': 0.3}
+      0.15: {'K': 3, 'dropout': 0.3}
+      0.2: {'K': 2, 'dropout': 0.4}
+      0.25: {'K': 3, 'dropout': 0.6}
+    PGD-Self:
+      0.0: {'K': 3, 'dropout': 0.6}
+      0.05: {'K': 2, 'dropout': 0.4}
+      0.1: {'K': 3, 'dropout': 0.5}
+      0.15: {'K': 2, 'dropout': 0.4}
+      0.2: {'K': 3, 'dropout': 0.3}
+      0.25: {'K': 2, 'dropout': 0.5}
+  citeseer:
+    Meta-Self:
+      0.0: {'K': 2, 'dropout': 0.7}
+      0.05: {'K': 2, 'dropout': 0.6}
+      0.1: {'K': 5, 'dropout': 0.7}
+      0.15: {'K': 5, 'dropout': 0.7}
+      0.2: {'K': 4, 'dropout': 0.7}
+      0.25: {'K': 4, 'dropout': 0.3}
+    PGD-Self:
+      0.0: {'K': 2, 'dropout': 0.7}
+      0.05: {'K': 2, 'dropout': 0.7}
+      0.1: {'K': 2, 'dropout': 0.7}
+      0.15: {'K': 6, 'dropout': 0.3}
+      0.2: {'K': 2, 'dropout': 0.3}
+      0.25: {'K': 2, 'dropout': 0.4}
+  computers:
+    Meta-Self:
+      0.0: {'K': 3, 'dropout': 0.5}
+      0.05: {'K': 4, 'dropout': 0.4}
+      0.1: {'K': 2, 'dropout': 0.4}
+      0.15: {'K': 5, 'dropout': 0.4}
+      0.2: {'K': 2, 'dropout': 0.4}
+      0.25: {'K': 3, 'dropout': 0.5}
+    PGD-Self:
+      0.0: {'K': 3, 'dropout': 0.5}
+      0.05: {'K': 5, 'dropout': 0.3}
+      0.1: {'K': 2, 'dropout': 0.3}
+      0.15: {'K': 3, 'dropout': 0.3}
+      0.2: {'K': 5, 'dropout': 0.3}
+      0.25: {'K': 4, 'dropout': 0.3}
+  photo:
+    Meta-Self:
+      0.0: {'K': 5, 'dropout': 0.5}
+      0.05: {'K': 2, 'dropout': 0.3}
+      0.1: {'K': 4, 'dropout': 0.3}
+      0.15: {'K': 6, 'dropout': 0.4}
+      0.2: {'K': 2, 'dropout': 0.5}
+      0.25: {'K': 2, 'dropout': 0.5}
+    PGD-Self:
+      0.0: {'K': 5, 'dropout': 0.5}
+      0.05: {'K': 3, 'dropout': 0.3}
+      0.1: {'K': 4, 'dropout': 0.3}
+      0.15: {'K': 4, 'dropout': 0.3}
+      0.2: {'K': 6, 'dropout': 0.3}
+      0.25: {'K': 3, 'dropout': 0.3}
