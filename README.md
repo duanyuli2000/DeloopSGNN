@@ -35,16 +35,7 @@ Based on this insight, we propose **DeloopSGNN**, which imposes an **acyclic con
 
 3. **Superior Performance**: Achieves state-of-the-art results on 16 datasets with strong adversarial robustness.
 
-## Method Overview
-
-### Traditional vs. Loop-Free Aggregation
-
-| Method | Aggregation | Loops | Over-smoothing |
-|--------|-------------|--------|----------------|
-| ChebNet/BernNet | A^k | Yes | Suffers |
-| **DeloopSGNN** | A_k^loop-free | No | Mitigated |
-
-### Model Architecture
+## Model Architecture
 
 ```
 Input Features
@@ -203,6 +194,6 @@ This work was supported by National University of Defense Technology. We thank t
 
 <div align="center">
 
-**For questions, please contact: wuhuijun@nudt.edu.cn**
+**For questions, please contact: wuhuijun@nudt.edu.cn or liduanyu19@nudt.edu.cn**
 
 </div>
