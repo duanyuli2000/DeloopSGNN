@@ -1,4 +1,4 @@
-# DeleoSGNN: Revisiting Spectral GNNs Through the Lens of Spatial Aggregation
+# Deleoiting Spectral GNNs Through the Lens ofSGNN: Revis Spatial Aggregation
 
 <div align="center">
 
@@ -139,22 +139,6 @@ python exp2_robust.py --model DeloopSGNN --dataset cora --attack metattack
 | `JacobiConv` | Jacobi polynomial filters |
 | `GPRGNN` | Generalized PageRank GNN |
 | `GCNSVD` | Low-rank approximation |
-
-## Experimental Results
-
-### Accuracy Comparison
-
-| Dataset | DeloopSGNN | ChebNet | BernNet | GPRGNN |
-|---------|-------------|---------|---------|---------|
-| Cora | **84.5%** | 82.2% | 78.8% | 76.0% |
-| Citeseer | **77.3%** | 73.1% | 71.5% | 69.2% |
-| Chameleon | **68.7%** | 62.3% | 58.9% | 55.4% |
-
-### Key Findings
-
-1. **Loop-free design consistently improves performance** across all spectral baselines
-2. **Adversarial robustness** significantly enhanced by removing short loops
-3. **Generalization** improved on both homophilic and heterophilic graphs
 
 ## Project Structure
 
