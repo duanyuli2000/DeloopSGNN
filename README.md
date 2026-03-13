@@ -1,5 +1,3 @@
-# Deleoiting Spectral GNNs Through the Lens of SGNN: Revis Spatial Aggregation
-
 <div align="center">
 
 **DeloopSGNN: Revisiting Spectral GNNs Through the Lens of Spatial Aggregation**
