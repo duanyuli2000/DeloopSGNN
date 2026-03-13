@@ -1,13 +1,13 @@
 """
 DeloopSGNN: Revisiting Spectral GNNs Through the Lens of Spatial Aggregation
 
-本文件实现了论文中的核心模型：DeloopSGNN
-论文: AAAI 2026
+This file implements the core model: DeloopSGNN
+Published at AAAI 2026
 
-核心思想：
-    - 谱域 GNN 的问题：深度聚合时会出现 over-smoothing
-    - 原因：Ã^k 包含计算环路，导致信号回流和重复稀释
-    - 解决：使用无环邻接矩阵 (loop-free adjacency matrix)
+Core Idea:
+    - Problem: Spectral GNNs suffer from over-smoothing in deep aggregation
+    - Cause: A^k contains computational loops, causing signal backflow and repeated dilution
+    - Solution: Use loop-free adjacency matrices
 
 Author: Duanyu Li, Huijun Wu, et al.
 """
@@ -24,77 +24,80 @@ from copy import deepcopy
 
 def adj_norm(adj, if_self_loop=True):
     """
-    邻接矩阵对称归一化: D^(-1/2) * A * D^(-1/2)
+    Symmetrically normalize adjacency matrix: D^(-1/2) * A * D^(-1/2)
     
     Parameters:
-        adj: 邻接矩阵
-        if_self_loop: 是否添加自环
+        adj: Adjacency matrix
+        if_self_loop: Whether to add self-loops
     
     Returns:
-        归一化后的邻接矩阵
+        Normalized adjacency matrix
     """
     D = adj.sum(dim=1)
     if if_self_loop:
-        D = D + 1  # 添加自环后度+1
+        D = D + 1
     D_inv_sqrt = torch.pow(D, -0.5)
-    D_inv_sqrt[D <= 0] = 0  # 处理度为0的情况
+    D_inv_sqrt[D <= 0] = 0
     D_inv_sqrt = torch.diag(D_inv_sqrt)
     return D_inv_sqrt @ adj @ D_inv_sqrt
 
 
-# ==================== 无环邻接矩阵 (Loop-Free Adjacency Matrix) ====================
+# ==================== Loop-Free Adjacency Matrix ====================
 """
-无环邻接矩阵的核心思想：
-    传统的 k 跳邻接矩阵 Ã^k 包含了通过同一节点的路径（环路）
-    这会导致：1) 信号回流 2) 特征重复稀释
+Core idea of loop-free adjacency matrix:
+    Traditional k-hop adjacency matrix A^k contains paths that pass through 
+    the same node (loops), which causes:
+    1) Signal backflow
+    2) Repeated feature dilution
     
-    无环版本只保留真正的 k 跳邻居，不经过中间节点
+    Loop-free version only keeps true k-hop neighbors without passing 
+    through intermediate nodes
 """
 
 def lra_2_hop(adj):
     """
-    计算 2 跳无环路邻接矩阵
+    Compute 2-hop loop-free adjacency matrix
     
-    传统方法: Ã² = Ã @ Ã
-    无环方法: 只保留真正的 2 跳邻居，移除自环
+    Traditional: A^2 = A @ A
+    Loop-free: Only keep true 2-hop neighbors, remove self-loops
     
     Args:
-        adj: 原始邻接矩阵
+        adj: Original adjacency matrix
     
     Returns:
-        2 跳无环路邻接矩阵
+        2-hop loop-free adjacency matrix
     """
     P2 = adj @ adj
-    P2.fill_diagonal_(0)  # 移除自环
+    P2.fill_diagonal_(0)
     return P2
 
 
 def lra_3_hop(adj):
     """
-    计算 3 跳无环路邻接矩阵
+    Compute 3-hop loop-free adjacency matrix
     
-    传统方法: Ã³ = Ã² @ Ã
-    无环方法: 移除经过 1 跳路径的连接
+    Traditional: A^3 = A^2 @ A
+    Loop-free: Remove paths passing through 1-hop neighbors
     
-    数学推导:
-        P3 = P2 @ Ã - Ã * (degrees - 1)
-        其中 (degrees - 1) 是减去通过 1 跳路径的连接数
+    Mathematical derivation:
+        P3 = P2 @ A - A * (degrees - 1)
+        where (degrees - 1) subtracts paths through 1-hop neighbors
     """
     degrees = adj.sum(dim=1).unsqueeze(0)
     P2 = lra_2_hop(adj)
     Q3 = P2 @ adj
-    P3 = Q3 - adj * (degrees - 1)  # 移除 1 跳路径
+    P3 = Q3 - adj * (degrees - 1)
     P3.fill_diagonal_(0)
     return P3
 
 
 def lra_4_hop(adj):
     """
-    计算 4 跳无环路邻接矩阵
+    Compute 4-hop loop-free adjacency matrix
     
-    更加复杂的移除逻辑，需要考虑：
-    - 经过 1 跳路径的连接
-    - 经过 2 跳路径的连接
+    More complex removal logic considering:
+    - Paths through 1-hop neighbors
+    - Paths through 2-hop neighbors
     """
     P3 = lra_3_hop(adj)
     P2 = lra_2_hop(adj)
@@ -103,11 +106,9 @@ def lra_4_hop(adj):
     degrees = adj.sum(dim=1).unsqueeze(0)
     Q3_diag = Q3.diagonal().unsqueeze(0)
 
-    # 两种情况的组合
-    P4_0 = Q4 - (degrees - 1) * P2  # 非邻居情况
-    P4_1 = Q4 - degrees * P2 - Q3_diag + 4 * P2  # 邻居情况
+    P4_0 = Q4 - (degrees - 1) * P2
+    P4_1 = Q4 - degrees * P2 - Q3_diag + 4 * P2
     
-    # 根据原始邻接矩阵选择
     P4 = P4_0 * (1 - adj) + P4_1 * adj
     P4.fill_diagonal_(0)
     return P4
@@ -115,9 +116,9 @@ def lra_4_hop(adj):
 
 def lra_5_hop(adj):
     """
-    计算 5 跳无环路邻接矩阵
+    Compute 5-hop loop-free adjacency matrix
     
-    更复杂的推导，需要考虑 1-4 跳的所有路径
+    Even more complex derivation considering all paths from 1-4 hops
     """
     P2 = lra_2_hop(adj)
     P3 = lra_3_hop(adj)
@@ -145,16 +146,16 @@ def lra_5_hop(adj):
 
 def lra_k_hop(adj, k):
     """
-    获取 k 跳无环路邻接矩阵
+    Get k-hop loop-free adjacency matrix
     
     Args:
-        adj: 邻接矩阵
-        k: 跳数 (0-5)
+        adj: Adjacency matrix
+        k: Number of hops (0-5)
     
     Returns:
-        k 跳无环路邻接矩阵
+        k-hop loop-free adjacency matrix
     
-    Note: k > 5 时返回零矩阵（尚未实现）
+    Note: Returns zero matrix for k > 5 (not implemented yet)
     """
     if k == 0:
         return torch.eye(adj.shape[0], dtype=torch.float32).to(adj.device)
@@ -169,20 +170,19 @@ def lra_k_hop(adj, k):
     elif k == 5:
         return lra_5_hop(adj)
     else:
-        # k > 5 时返回零矩阵（简化处理）
         return torch.zeros_like(adj)
 
 
 def adj_k_hop(adj, k):
     """
-    传统的 k 跳邻接矩阵（带环路）
+    Traditional k-hop adjacency matrix (with loops)
     
     Args:
-        adj: 邻接矩阵
-        k: 跳数
+        adj: Adjacency matrix
+        k: Number of hops
     
     Returns:
-        Ã^k
+        A^k
     """
     adj_k = torch.eye(adj.shape[0], dtype=torch.float32).to(adj.device)
     for i in range(k):
@@ -192,27 +192,24 @@ def adj_k_hop(adj, k):
 
 def get_adj_list(adj, K):
     """
-    获取 0 到 K 跳的邻接矩阵列表
+    Get adjacency matrix list from 0 to K hops
     
     Args:
-        adj: 邻接矩阵
-        K: 最大跳数
+        adj: Adjacency matrix
+        K: Maximum number of hops
     
     Returns:
-        adj_list: 邻接矩阵列表 [Ã₀, Ã₁, ..., Ã_K]
+        adj_list: List of adjacency matrices [A_0, A_1, ..., A_K]
     """
     Ak_list = []
-    # 归一化带自环的邻接矩阵
     adj_n_k = adj_norm(adj + torch.eye(adj.shape[0]).to(adj.device), if_self_loop=False)
     
     for k in range(K + 1):
         if k <= 5:
-            # 使用无环路邻接矩阵
             adj_k_lf = lra_k_hop(adj, k)
             adj_k_lf = adj_norm(adj_k_lf)
             Ak_list.append(adj_k_lf)
         else:
-            # k > 5 使用传统邻接矩阵
             adj_k_lf = adj_k_hop(adj_n_k, k)
             Ak_list.append(adj_k_lf)
     
@@ -221,35 +218,35 @@ def get_adj_list(adj, K):
 
 class Deloop_prop(MessagePassing):
     """
-    无环路邻域聚合层
+    Loop-free neighborhood aggregation layer
     
-    核心思想：
-        使用可学习的系数 θ_k 对不同跳数的无环邻接矩阵进行加权组合
+    Core idea:
+        Use learnable coefficients theta_k to weight different hop matrices
         
-        output = Σ θ_k * (Ã_k_loop_free @ x)
+        output = sum(theta_k * (A_k_loop_free @ x))
         
-    其中 θ_k 是可学习的参数，控制 k 跳邻居信息的贡献
+    where theta_k are learnable parameters controlling each hop's contribution
     """
 
     def __init__(self, K):
         """
         Args:
-            K: 最大跳数
+            K: Maximum number of hops
         """
         super(Deloop_prop, self).__init__(aggr='add')
         self.K = K
         
-        # 初始化可学习参数 θ_k
-        # 使用 Xavier 初始化，保证梯度稳定
+        # Initialize learnable parameters theta_k
+        # Using Xavier initialization for stable gradients
         bound = np.sqrt(3 / (K + 1))
         TEMP = np.random.uniform(-bound, bound, K + 1)
-        TEMP = TEMP / np.sum(np.abs(TEMP))  # 归一化
-        TEMP[0] = 0  # k=0 不使用（已经是节点自身特征）
+        TEMP = TEMP / np.sum(np.abs(TEMP))
+        TEMP[0] = 0  # k=0 not used (node's own features)
         
         self.temp = Parameter(torch.tensor(TEMP))
 
     def reset_parameters(self):
-        """重置参数"""
+        """Reset parameters"""
         torch.nn.init.zeros_(self.temp)
         bound = np.sqrt(3 / (self.K + 1))
         TEMP = np.random.uniform(-bound, bound, self.K + 1)
@@ -259,18 +256,17 @@ class Deloop_prop(MessagePassing):
 
     def forward(self, x, adj_list):
         """
-        前向传播
+        Forward propagation
         
         Args:
-            x: 节点特征 [N, d]
-            adj_list: 邻接矩阵列表
+            x: Node features [N, d]
+            adj_list: List of adjacency matrices
         
         Returns:
-            聚合后的特征
+            Aggregated features
         """
         hidden = torch.zeros_like(x, dtype=x.dtype, device=x.device)
         
-        # 对每个跳数进行加权聚合
         for k in range(self.K + 1):
             adj_k = adj_list[k]
             hidden += self.temp[k] * (adj_k @ x)
@@ -278,7 +274,7 @@ class Deloop_prop(MessagePassing):
         return hidden
 
     def message(self, x_j, norm):
-        """消息传递函数"""
+        """Message passing function"""
         return norm.view(-1, 1) * x_j
 
     def __repr__(self):
@@ -287,31 +283,31 @@ class Deloop_prop(MessagePassing):
 
 class DeloopSGNN(torch.nn.Module):
     """
-    DeloopSGNN 模型
+    DeloopSGNN Model
     
-    整体架构：
-        1. 特征变换: Linear(nfeat -> nhid) -> ReLU -> Dropout
-        2. 无环路传播: Deloop_prop (可学习系数的多跳聚合)
-        3. 输出层: Linear(nhid -> nclass) -> LogSoftmax
+    Architecture:
+        1. Feature Transform: Linear(nfeat -> nhid) -> ReLU -> Dropout
+        2. Loop-Free Propagation: Deloop_prop (learnable coefficient multi-hop aggregation)
+        3. Output: Linear(nhid -> nclass) -> LogSoftmax
     
-    与传统谱方法的区别：
-        - 传统: 使用 Ã^k 进行 k 跳聚合（包含环路）
-        - Ours: 使用无环邻接矩阵，消除信号回流
+    Difference from traditional spectral methods:
+        - Traditional: Use A^k for k-hop aggregation (contains loops)
+        - Ours: Use loop-free adjacency matrices, eliminate signal backflow
     """
 
     def __init__(self, nfeat, nhid, nclass, K=10, dropout=0.5, lr=0.01, 
                  weight_decay=5e-4, with_relu=True, device=None):
         """
         Args:
-            nfeat: 输入特征维度
-            nhid: 隐藏层维度
-            nclass: 类别数
-            K: 最大跳数
-            dropout: Dropout 比率
-            lr: 学习率
-            weight_decay: 权重衰减
-            with_relu: 是否使用 ReLU
-            device: 设备 (cpu/cuda)
+            nfeat: Input feature dimension
+            nhid: Hidden layer dimension
+            nclass: Number of classes
+            K: Maximum number of hops
+            dropout: Dropout ratio
+            lr: Learning rate
+            weight_decay: Weight decay
+            with_relu: Whether to use ReLU
+            device: Device (cpu/cuda)
         """
         super(DeloopSGNN, self).__init__()
         assert device is not None, "Please specify 'device'!"
@@ -321,11 +317,11 @@ class DeloopSGNN(torch.nn.Module):
         self.nclass = nclass
         self.nhid = nhid
         
-        # 特征变换层
+        # Feature transformation layers
         self.lin1 = Linear(nfeat, nhid)
         self.lin2 = Linear(nhid, nclass)
         
-        # 无环路传播层
+        # Loop-free propagation layer
         self.prop1 = Deloop_prop(K)
         self.K = K
         
@@ -340,23 +336,23 @@ class DeloopSGNN(torch.nn.Module):
         self.features = None
 
     def reset_parameters(self):
-        """重置所有参数"""
+        """Reset all parameters"""
         self.lin1.reset_parameters()
         self.lin2.reset_parameters()
         self.prop1.reset_parameters()
 
     def forward(self, x, adj_list):
         """
-        前向传播
+        Forward propagation
         
         Args:
-            x: 节点特征
-            adj_list: 无环邻接矩阵列表
+            x: Node features
+            adj_list: Loop-free adjacency matrix list
         
         Returns:
-            Log 概率
+            Log probabilities
         """
-        # 特征变换
+        # Feature transformation
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = self.lin1(x)
         if self.with_relu:
@@ -367,35 +363,35 @@ class DeloopSGNN(torch.nn.Module):
         
         x = F.dropout(x, p=self.dropout, training=self.training)
         
-        # 无环路传播
+        # Loop-free propagation
         x = self.prop1(x, adj_list)
         
         return F.log_softmax(x, dim=1)
 
     def initialize(self):
-        """初始化模型参数"""
+        """Initialize model parameters"""
         self.reset_parameters()
 
     def fit(self, features, adj, labels, idx_train, idx_val=None, train_iters=200,
             initialize=True, verbose=False, normalize=True, patience=500, **kwargs):
         """
-        训练模型
+        Train the model
         
         Args:
-            features: 节点特征
-            adj: 邻接矩阵
-            labels: 节点标签
-            idx_train: 训练集索引
-            idx_val: 验证集索引 (可选)
-            train_iters: 训练轮数
-            initialize: 是否初始化参数
-            verbose: 是否打印日志
-            patience: 早停耐心值
+            features: Node features
+            adj: Adjacency matrix
+            labels: Node labels
+            idx_train: Training set indices
+            idx_val: Validation set indices (optional)
+            train_iters: Number of training epochs
+            initialize: Whether to initialize parameters
+            verbose: Whether to print logs
+            patience: Early stopping patience
         """
         if initialize:
             self.initialize()
 
-        # 转换为张量
+        # Convert to tensors
         if type(adj) is not torch.Tensor:
             features, adj, labels = utils.to_tensor(features, adj, labels, device=self.device)
         else:
@@ -403,18 +399,18 @@ class DeloopSGNN(torch.nn.Module):
             adj = adj.to(self.device)
             labels = labels.to(self.device)
 
-        # 获取邻接矩阵列表（无环）
+        # Get adjacency matrix list (loop-free)
         self.adj_list = get_adj_list(adj, self.K)
         self.features = features
         self.labels = labels
         
-        # 调整 K 值
+        # Adjust K value
         if self.K > len(self.adj_list) - 1:
             self.K = len(self.adj_list) - 1
             self.prop1.K = self.K
             self.prop1.reset_parameters()
         
-        # 训练
+        # Training
         if idx_val is None:
             self._train_without_val(labels, idx_train, train_iters, verbose)
         else:
@@ -424,7 +420,7 @@ class DeloopSGNN(torch.nn.Module):
                 self._train_with_val(labels, idx_train, idx_val, train_iters, verbose)
 
     def _train_without_val(self, labels, idx_train, train_iters, verbose):
-        """无验证集的训练"""
+        """Training without validation set"""
         self.train()
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         
@@ -442,7 +438,7 @@ class DeloopSGNN(torch.nn.Module):
         self.output = self.forward(self.features, self.adj_list)
 
     def _train_with_early_stopping(self, labels, idx_train, idx_val, train_iters, patience, verbose):
-        """带早停的训练"""
+        """Training with early stopping"""
         if verbose:
             print('=== Training with early stopping ===')
         
@@ -484,7 +480,7 @@ class DeloopSGNN(torch.nn.Module):
         self.output = self.forward(self.features, self.adj_list)
 
     def _train_with_val(self, labels, idx_train, idx_val, train_iters, verbose):
-        """带验证集的训练（无早停）"""
+        """Training with validation set (no early stopping)"""
         optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
         
         for i in range(train_iters):
@@ -505,14 +501,14 @@ class DeloopSGNN(torch.nn.Module):
         self.output = self.forward(self.features, self.adj_list)
 
     def test(self, idx_test, verbose=False):
-        """测试模型
+        """Test the model
         
         Args:
-            idx_test: 测试集索引
-            verbose: 是否打印结果
+            idx_test: Test set indices
+            verbose: Whether to print results
         
         Returns:
-            准确率
+            Accuracy
         """
         self.eval()
         output = self.forward(self.features, self.adj_list)
@@ -524,6 +520,6 @@ class DeloopSGNN(torch.nn.Module):
         return acc_test.item()
 
     def predict(self):
-        """预测"""
+        """Prediction"""
         self.eval()
         return self.forward(self.features, self.adj_list)
