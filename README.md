@@ -64,23 +64,16 @@ LogSoftmax
 Prediction
 ```
 
-## Experimental Environment
-
-### Hardware
-
-| Component | Details |
-|-----------|---------|
-| Server | SSH Server (lab-server-A6000-remote) |
-| IP | 120.46.131.227 |
-| User | hello |
-| GPU | NVIDIA GPU (if available) |
+## Requirements
 
 ### Software
 
-#### Operating System
-- Linux (Ubuntu/Debian)
+- Python 3.8+
+- PyTorch 2.0+
+- CUDA (optional, for GPU acceleration)
 
-#### Python Dependencies
+### Python Dependencies
+
 ```bash
 # Core deep learning
 torch>=2.0.0
@@ -105,30 +98,10 @@ pytorch-lightning>=2.0.0
 tqdm>=4.65.0
 ```
 
-#### Installation
+### Installation
 
 ```bash
 pip install -r requirements.txt
-```
-
-#### Server Environment (Reference)
-```
-torch              2.10.0
-numpy              1.26.4
-pandas             2.2.3
-scipy              1.15.3
-PyYAML             5.4.1
-```
-
-### Working Directory
-
-```
-/home/hello/ldy/liclaw/
-├── workspace/          # Code workspace
-│   └── DeleopSGNN/ # Project code
-├── data/              # Small datasets
-├── outputs/           # Experiment outputs
-└── temp/              # Temporary files
 ```
 
 ## Quick Start
