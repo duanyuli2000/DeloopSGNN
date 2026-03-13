@@ -102,22 +102,6 @@ python exp1_generalization.py --model DeloopSGNN --dataset cora --n_trials 3
 python exp2_robust.py --model DeloopSGNN --dataset cora --attack metattack
 ```
 
-### Available Datasets
-
-- Homophilic: Cora, Citeseer, Pubmed, Reddit, ogbn-arxiv
-- Heterophilic: Chameleon, Squirrel, Film, Texas, Wisconsin, Cornell
-
-### Available Models
-
-| Model | Description |
-|-------|-------------|
-| `DeloopSGNN` | Proposed method with loop-free propagation |
-| `ChebNet` | Chebyshev polynomial filters |
-| `BernNet` | Bernstein polynomial filters |
-| `JacobiConv` | Jacobi polynomial filters |
-| `GPRGNN` | Generalized PageRank GNN |
-| `GCNSVD` | Low-rank approximation |
-
 ## Project Structure
 
 ```
