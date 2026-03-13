@@ -1,152 +1,124 @@
-# run_single.py
+"""
+Experiment 1: Standard Task Accuracy Evaluation
+
+本脚本用于在标准节点分类任务上评估模型的准确率
+
+支持的数据集:
+    - 同构图: Cora, Citeseer, Pubmed, Reddit, ogbn-arxiv
+    - 异构图: Chameleon, Squirrel, Film, Texas, Wisconsin, Cornell
+
+使用方法:
+    python exp1_generalization.py --model DeloopSGNN --dataset cora --n_trials 3
+"""
+
+import argparse
 import torch
 import numpy as np
 import pandas as pd
-import time
-import argparse
-from pytorch_lightning import seed_everything
-from data_utils import DataLoader, random_splits, preprocess, mask_to_index
-from base_models import *
 import yaml
+import os
 
-def run_single(model_name, adj,features,labels, data_split, n_trials=10,device = 'cpu'):
+from data_utils import DataLoader, random_splits
+from base_models import *
 
 
+# 模型配置
+MODEL_CONFIG = {
+    'DeloopSGNN': {
+        'class': DeloopSGNN,
+        'params': {'K': 10, 'dropout': 0.5}
+    },
+    'ChebNet': {
+        'class': ChebNet,
+        'params': {'num_hops': 3, 'dropout': 0.5}
+    },
+    'BernNet': {
+        'class': BernNet,
+        'params': {'K': 8, 'dropout': 0.5}
+    },
+    # ... 其他模型配置
+}
+
+
+def parse_args():
+    """解析命令行参数"""
+    parser = argparse.ArgumentParser(description='Graph Classification Experiment')
+    parser.add_argument('--model', type=str, default='DeloopSGNN',
+                       help='Model name')
+    parser.add_argument('--dataset', type=str, default='cora',
+                       help='Dataset name')
+    parser.add_argument('--n_trials', type=int, default=3,
+                       help='Number of trials for averaging')
+    parser.add_argument('--gpu', type=int, default=0,
+                       help='GPU id')
+    parser.add_argument('--seed', type=int, default=42,
+                       help='Random seed')
+    return parser.parse_args()
+
+
+def main():
+    """主函数"""
+    args = parse_args()
     
+    # 设置随机种子
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
+    
+    # 设备
+    device = f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu'
+    print(f'Using device: {device}')
+    
+    # 加载数据
+    dataset, data = DataLoader(args.dataset)
+    features = data.x
+    labels = data.y
+    edge_index = data.edge_index
+    
+    # 构建邻接矩阵
+    n = features.shape[0]
+    adj = np.zeros((n, n))
+    adj[edge_index[0].numpy(), edge_index[1].numpy()] = 1
+    
+    # 数据划分
+    data_split = random_splits(labels, 2000)
     idx_train, idx_val, idx_test = data_split[0], data_split[1], data_split[2]
-
-    config = MODEL_CONFIG[model_name]
-    model_class = config['class']
-    model_params = config['params']
     
-    print(f"\n{'='*50}")
-    print(f"Running model: {model_name} on dataset {dname}")
-    print(f"Using parameters: {model_params}")
-    print(f"{'='*50}")
+    # 获取模型
+    model_info = MODEL_CONFIG.get(args.model)
+    if model_info is None:
+        raise ValueError(f'Unknown model: {args.model}')
+    
+    # 运行实验
     accuracies = []
-    start_time = time.time()
-
-    for trial in range(n_trials):
-        # 初始化模型
-        model = model_class(
+    for trial in range(args.n_trials):
+        print(f'\n=== Trial {trial+1}/{args.n_trials} ===')
+        
+        # 创建模型
+        model = model_info['class'](
             nfeat=features.shape[1],
             nclass=labels.max().item() + 1,
             nhid=64,
-            lr=0.01,
-            weight_decay=5e-4,
             device=device,
-            **model_params
+            **model_info['params']
         ).to(device)
         
-        model.fit(features, adj, labels, idx_train, idx_val,patience = 400, train_iters=1000, verbose=False)
+        # 训练
+        model.fit(features, adj, labels, idx_train, idx_val, 
+                  train_iters=1000, patience=400, verbose=False)
+        
+        # 测试
         acc = model.test(idx_test)
         accuracies.append(acc)
-        
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        print(f"  Trial {trial+1}/{n_trials} - Accuracy: {acc*100:.2f}%")
+        print(f'Trial {trial+1} Accuracy: {acc*100:.2f}%')
     
+    # 汇总结果
     mean_acc = np.mean(accuracies) * 100
     std_acc = np.std(accuracies) * 100
-    new_result = f"{mean_acc:.1f} ± {std_acc:.1f}"
-    elapsed = time.time() - start_time
-    print(f"\nCompleted in {elapsed:.1f}s")
-    print(f"New result: {new_result}")
-    
-    try:
-        df = pd.read_csv(result_file, index_col=0)
-    except FileNotFoundError:
-        print(f"File {result_file} not found, creating new result table")
-        df = pd.DataFrame(columns=list(MODEL_CONFIG.keys()))
-    
-    line_name = f"{dname}"
-    if line_name not in df.index:
-        df.loc[line_name] = [None] * (len(df.columns))
+    print(f'\n=== Results ===')
+    print(f'Model: {args.model}')
+    print(f'Dataset: {args.dataset}')
+    print(f'Accuracy: {mean_acc:.1f} ± {std_acc:.1f}%')
 
-    # 更新该模型的结果
-    df.loc[line_name, model_name] = new_result
-    df.to_csv(result_file)
-    print(f"Results updated and saved to {result_file}")
-    return df
 
-if __name__ == "__main__":
-    datasets = ["cornell", "texas", "reed98", "citeseer", "amherst41", "chameleon", "cora", "johnshopkins55", "squirrel", "photo", "actor", "film", "computers", "cornell5", "pubmed", "penn94"]     
-
-    parser = argparse.ArgumentParser(description='Re-run single model experiment')
-    parser.add_argument('--model', type=str, default="DeloopSGNN", help='Model name to re-run (e.g., GPRGNN)')
-    parser.add_argument('--dataset', type=str, default="cora", help=f"Supported datasets: {datasets}")
-    parser.add_argument('--result_file', type=str, default='./result/exp1_result.csv', help='Path to existing result file')
-    parser.add_argument('--n_trials', type=int, default=10, help='Number of trials to run')
-    parser.add_argument('--base_seed', type=int, default=3, help='Base random seed')
-    parser.add_argument('--device_num', type=int, default=0, help='GPU device number to use (default: 0)')
-    
-    model = parser.parse_args().model
-    dname = parser.parse_args().dataset
-    result_file = parser.parse_args().result_file
-    n_trials = parser.parse_args().n_trials
-    seed = parser.parse_args().base_seed
-    device_num = parser.parse_args().device_num
-    device = torch.device(f"cuda:{device_num}" if torch.cuda.is_available() else "cpu")
-    
-    
-    MODEL_CONFIG = {
-        'GCN': {'class': GCN, 'params': {}},
-        'GAT': {'class': GAT, 'params': {}},
-        'H2GCN': {'class': H2GCN, 'params': {}},
-        'FAGCN': {'class': FAGCN, 'params': {"epsilon":0.01}},
-        'GPRGNN': {'class': GPRGNN, 'params': {'K': 10, "dropout":0.4}}, 
-        'ChebNet': {'class': ChebNet, 'params': {}},
-        'EvenNet': {'class': EvenNet, 'params': {'K': 10}}, 
-        'BernNet': {'class': BernNet, 'params': {'K': 8}},        
-        'JacobiConvGNN': {'class': JacobiConvGNN, 'params': {'K': 5,"alpha":0.5, "dropout":0.7}},
-        'DeloopSGNN': {'class': DeloopSGNN, 'params': {}},
-    }
-    
-    
-    assert model in MODEL_CONFIG, f"Model {model} not found in MODEL_CONFIG"
-    assert dname in ['cora', 'citeseer', 'photo', 'computers'], f"Dataset {dname} not supported. Supported datasets: ['cora', 'citeseer', 'photo', 'computers']"
-    with open('params.yaml', 'r') as f:
-        dataset_config = yaml.safe_load(f)
-        dataset_config = dataset_config["exp1"]
-        MODEL_CONFIG["DeloopSGNN"]['params'].update(dataset_config.get(dname, {}))
-        
-    seed_everything(seed)
-    device_num = parser.parse_args().device_num
-    device = torch.device(f"cuda:{device_num}" if torch.cuda.is_available() else "cpu")
-
-    print(f"Dataset: {dname}")
-
-    # preprocess data
-    if dname in ['penn94','photo','cora','computers','pubmed','citeseer','johnshopkins55']:
-        split_rate = [0.1, 0.1, 0.8] 
-    else:
-        split_rate = [0.6, 0.2, 0.2]
-    dataset, data = DataLoader(dname)
-    data_split = random_splits(data, dataset.num_classes, 
-                            train_rate=split_rate[0], 
-                            val_rate=split_rate[1],
-                            Flag=0)
-    adj,features, labels = preprocess(data_split)
-    adj, features, labels = adj.to(device), features.to(device), labels.to(device)
-    
-    n = adj.shape[0]
-    idx_train = mask_to_index(data_split.train_mask, n)
-    idx_val = mask_to_index(data_split.val_mask, n)
-    idx_test = mask_to_index(data_split.test_mask, n)
-    
-    print("-"*50)
-
-    try:
-        updated_df = run_single(
-            model_name=model,
-            adj = adj,
-            features=features,
-            labels=labels,
-            data_split=[idx_train, idx_val, idx_test],
-            n_trials=n_trials,
-            device=device,
-        )
-    except:
-        print(f"Error running model {model} in dataset {dname}")
-    print("\nUpdated Result Table:")
-    print(updated_df)
+if __name__ == '__main__':
+    main()
