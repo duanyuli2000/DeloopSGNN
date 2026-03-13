@@ -33,26 +33,6 @@ Based on this insight, we propose **DeloopSGNN**, which imposes an **acyclic con
 
 3. **Superior Performance**: Achieves state-of-the-art results on 16 datasets with strong adversarial robustness.
 
-## Model Architecture
-
-```
-Input Features
-    |
-    v
-[Linear -> ReLU -> Dropout] x 2  (Feature Transformation)
-    |
-    v
-Deloop_prop(K)                    (Loop-Free Propagation)
-    |-- theta_0.A_0 + theta_1.A_1 + ... + theta_K.A_K
-    |-- Learnable coefficients for each hop
-    |
-    v
-LogSoftmax
-    |
-    v
-Prediction
-```
-
 ## Requirements
 
 ### Software
